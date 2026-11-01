@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import yorkieSpriteSheet from "../assets/Yorkie Adventure Sprite Sheet.png";
+import backgroundImage from "../assets/image.png";
 import "./style.css";
 
 class PlatformScene extends Phaser.Scene {
@@ -12,16 +13,26 @@ class PlatformScene extends Phaser.Scene {
       frameWidth: 384,
       frameHeight: 341,
     });
+    this.load.image("background", backgroundImage);
   }
 
   create() {
     const { width, height } = this.scale;
     const floorY = height - 48;
+    this.levelWidth = 3600;
 
-    this.physics.world.setBounds(0, 0, width, height);
+    this.createBackground(width, height);
+
+    this.physics.world.setBounds(0, 0, this.levelWidth, height);
     this.physics.world.gravity.y = 1100;
 
-    const floor = this.add.rectangle(width / 2, floorY, width, 4, 0xe7e7e7);
+    const floor = this.add.rectangle(
+      this.levelWidth / 2,
+      floorY,
+      this.levelWidth,
+      4,
+      0xe7e7e7,
+    );
     this.physics.add.existing(floor, true);
 
     const playerScale = 0.4;
@@ -31,6 +42,9 @@ class PlatformScene extends Phaser.Scene {
     this.player.body.setSize(260, 145);
     this.player.body.setOffset(62, 150);
     this.physics.add.collider(this.player, floor);
+
+    this.cameras.main.setBounds(0, 0, this.levelWidth, height);
+    this.cameras.main.startFollow(this.player, false, 1, 1);
 
     this.anims.create({
       key: "run",
@@ -45,6 +59,23 @@ class PlatformScene extends Phaser.Scene {
       right: Phaser.Input.Keyboard.KeyCodes.D,
       jump: Phaser.Input.Keyboard.KeyCodes.W,
     });
+  }
+
+  createBackground(width, height) {
+    const source = this.textures.get("background").getSourceImage();
+    const parallax = 0.15;
+    const requiredWidth = width + (this.levelWidth - width) * parallax;
+    const scale = Math.max(
+      requiredWidth / source.width,
+      height / source.height,
+    );
+
+    this.add
+      .image(0, (height - source.height * scale) / 2, "background")
+      .setOrigin(0, 0)
+      .setDisplaySize(source.width * scale, source.height * scale)
+      .setScrollFactor(parallax, 0)
+      .setDepth(-10);
   }
 
   update() {
@@ -83,7 +114,7 @@ class PlatformScene extends Phaser.Scene {
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: "game-canvas",
-  backgroundColor: "#ffffff",
+  backgroundColor: "#d279a9",
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
