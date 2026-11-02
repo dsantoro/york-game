@@ -1,9 +1,11 @@
 import Phaser from "phaser";
 import yorkieSpriteSheet from "../assets/Yorkie Adventure Sprite Sheet.png";
+import siameseCatSpriteSheet from "../assets/Siamese Cat Idle and Hit Animation Sprites.png";
 import backgroundImage from "../assets/image.png";
 import platformImage from "../assets/platform.png";
 import boneImage from "../assets/bone.png";
 import groundImage from "../assets/ground.png";
+import barkSpriteSheet from "../assets/bark.png";
 import "./style.css";
 
 class PlatformScene extends Phaser.Scene {
@@ -15,6 +17,14 @@ class PlatformScene extends Phaser.Scene {
     this.load.spritesheet("yorkie", yorkieSpriteSheet, {
       frameWidth: 384,
       frameHeight: 341,
+    });
+    this.load.spritesheet("siamese-cat", siameseCatSpriteSheet, {
+      frameWidth: 384,
+      frameHeight: 512,
+    });
+    this.load.spritesheet("bark", barkSpriteSheet, {
+      frameWidth: 384,
+      frameHeight: 249,
     });
     this.load.image("background", backgroundImage);
     this.load.image("platform", platformImage);
@@ -54,7 +64,18 @@ class PlatformScene extends Phaser.Scene {
     this.player.body.setSize(260, 145);
     this.player.body.setOffset(62, 150);
     this.physics.add.collider(this.player, floor);
+    this.barkSprite = this.add
+      .sprite(0, 0, "bark")
+      .setScale(playerScale)
+      .setOrigin(0.5, 1)
+      .setVisible(false)
+      .setDepth(3);
+    this.playerIsBarking = false;
     this.createPlatforms(floorY);
+    this.enemies = [];
+    this.createEnemy(700, floorY - 75, this.platformColliders[0]);
+    this.createEnemy(1250, floorY - 95, this.platformColliders[1]);
+    this.createEnemy(this.levelWidth - 220, floorY, floor);
     this.physics.add.overlap(
       this.player,
       this.bones,
@@ -94,17 +115,43 @@ class PlatformScene extends Phaser.Scene {
       frameRate: 9,
       repeat: -1,
     });
+    this.anims.create({
+      key: "bark",
+      frames: this.anims.generateFrameNumbers("bark", { start: 0, end: 3 }),
+      frameRate: 8,
+      repeat: 0,
+    });
+    this.anims.create({
+      key: "enemy-idle",
+      frames: this.anims.generateFrameNumbers("siamese-cat", {
+        start: 0,
+        end: 3,
+      }),
+      frameRate: 4,
+      repeat: -1,
+    });
+    this.anims.create({
+      key: "enemy-hurt",
+      frames: this.anims.generateFrameNumbers("siamese-cat", {
+        start: 4,
+        end: 7,
+      }),
+      frameRate: 8,
+      repeat: 0,
+    });
+    for (const enemy of this.enemies) enemy.play("enemy-idle");
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys({
       left: Phaser.Input.Keyboard.KeyCodes.A,
       right: Phaser.Input.Keyboard.KeyCodes.D,
       jump: Phaser.Input.Keyboard.KeyCodes.W,
+      bark: Phaser.Input.Keyboard.KeyCodes.B,
     });
 
-    this.gameStarted = false;
-    this.player.body.moves = false;
-    this.createStartPopup(width, height);
+    this.gameStarted = typeof this.createStartPopup !== "function";
+    this.player.body.moves = this.gameStarted;
+    if (!this.gameStarted) this.createStartPopup(width, height);
   }
 
   createBackground(width, height) {
@@ -135,18 +182,20 @@ class PlatformScene extends Phaser.Scene {
     ];
     const platformWidth = 220;
     const platformHeight = 108;
+    this.platformColliders = [];
     this.bones = this.physics.add.group({
       allowGravity: false,
       immovable: true,
     });
 
-    for (const { x, elevation } of layouts) {
+    for (const [index, { x, elevation }] of layouts.entries()) {
       const surfaceY = floorY - elevation;
       const imageY = surfaceY + platformHeight * 0.16;
       this.add
         .image(x, imageY, "platform")
         .setDisplaySize(platformWidth, platformHeight)
         .setDepth(1);
+
       const collider = this.add.rectangle(
         x,
         surfaceY + 8,
@@ -157,6 +206,8 @@ class PlatformScene extends Phaser.Scene {
       );
       this.physics.add.existing(collider, true);
       this.physics.add.collider(this.player, collider);
+      this.platformColliders.push(collider);
+      if (index < 2) continue;
 
       const bone = this.bones.create(x, surfaceY - 32, "bone");
       bone.setDisplaySize(40, 14.5);
@@ -170,6 +221,76 @@ class PlatformScene extends Phaser.Scene {
         yoyo: true,
         repeat: -1,
       });
+    }
+  }
+
+  createEnemy(x, platformTop, support) {
+    const enemyScale = 0.3;
+    const enemy = this.physics.add.sprite(x, platformTop, "siamese-cat", 0);
+    enemy.setScale(enemyScale).setOrigin(0.5, 1);
+    enemy.setCollideWorldBounds(true);
+    enemy.body.setSize(260, 200);
+    enemy.body.setOffset(62, 312);
+    enemy.body.setImmovable(true);
+    enemy.body.setAllowGravity(false);
+    enemy.damaged = false;
+    enemy.supportY = platformTop;
+    enemy.supportCollider = this.physics.add.collider(enemy, support);
+    this.enemies.push(enemy);
+  }
+
+  damageEnemy(player, enemy) {
+    if (enemy.damaged) return;
+
+    enemy.damaged = true;
+    enemy.body.enable = false;
+    enemy.setOrigin(0.5, 0.82).setDepth(2);
+    enemy.play("enemy-hurt");
+    enemy.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      enemy.anims.stop();
+      enemy.setTexture("siamese-cat").setFrame(7);
+      const direction = Math.sign(enemy.x - player.x) || 1;
+      const startX = enemy.x;
+      const enemyGroundY =
+        enemy.supportY - enemy.displayHeight * (1 - enemy.originY);
+      this.tweens.chain({
+        targets: enemy,
+        tweens: [
+          {
+            x: startX + direction * 28,
+            y: enemy.supportY - 52,
+            angle: direction * -8,
+            duration: 190,
+            ease: "Quad.out",
+          },
+          {
+            x: startX + direction * 100,
+            y: enemyGroundY + 250,
+            angle: direction * 24,
+            duration: 430,
+            ease: "Quad.in",
+          },
+        ],
+        onComplete: () => {
+          enemy.supportCollider.destroy();
+          enemy.destroy();
+        },
+      });
+    });
+  }
+
+  hitNearbyEnemies() {
+    const facingDirection = this.player.flipX ? -1 : 1;
+
+    for (const enemy of this.enemies) {
+      if (!enemy.active || enemy.damaged) continue;
+
+      const horizontalDistance = (enemy.x - this.player.x) * facingDirection;
+      const verticalDistance = Math.abs(enemy.y - this.player.y);
+      if (horizontalDistance < -40 || horizontalDistance > 100) continue;
+      if (verticalDistance > 150) continue;
+
+      this.damageEnemy(this.player, enemy);
     }
   }
 
@@ -346,6 +467,32 @@ class PlatformScene extends Phaser.Scene {
 
   update() {
     if (!this.gameStarted) return;
+
+    if (
+      Phaser.Input.Keyboard.JustDown(this.keys.bark) &&
+      !this.playerIsBarking
+    ) {
+      this.playerIsBarking = true;
+      this.player.setVisible(false);
+      this.barkSprite
+        .setPosition(this.player.x, this.player.getBounds().bottom - 10)
+        .setFlipX(this.player.flipX)
+        .setVisible(true)
+        .play("bark");
+      this.hitNearbyEnemies();
+      this.barkSprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+        this.barkSprite.setVisible(false);
+        this.player.setVisible(true);
+        this.playerIsBarking = false;
+      });
+    }
+
+    if (this.playerIsBarking) {
+      this.barkSprite.setPosition(
+        this.player.x,
+        this.player.getBounds().bottom - 10,
+      );
+    }
 
     const movingLeft = this.cursors.left.isDown || this.keys.left.isDown;
     const movingRight = this.cursors.right.isDown || this.keys.right.isDown;
