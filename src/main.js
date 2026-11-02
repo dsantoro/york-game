@@ -35,7 +35,7 @@ class PlatformScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     const floorY = height - 48;
-    this.levelWidth = 3600;
+    this.levelWidth = 7200;
 
     this.createBackground(width, height);
 
@@ -71,10 +71,11 @@ class PlatformScene extends Phaser.Scene {
       .setVisible(false)
       .setDepth(3);
     this.playerIsBarking = false;
-    this.createPlatforms(floorY);
     this.enemies = [];
-    this.createEnemy(700, floorY - 75, this.platformColliders[0]);
-    this.createEnemy(1250, floorY - 95, this.platformColliders[1]);
+    this.createPlatforms(floorY);
+    for (const spawn of this.enemySpawnPoints) {
+      this.createEnemy(spawn.x, spawn.surfaceY, spawn.support);
+    }
     this.createEnemy(this.levelWidth - 220, floorY, floor);
     this.physics.add.overlap(
       this.player,
@@ -178,11 +179,18 @@ class PlatformScene extends Phaser.Scene {
       { x: 1800, elevation: 65 },
       { x: 2350, elevation: 105 },
       { x: 2900, elevation: 80 },
-      { x: 3400, elevation: 90 },
+      { x: 3450, elevation: 90 },
+      { x: 4000, elevation: 75 },
+      { x: 4550, elevation: 95 },
+      { x: 5100, elevation: 65 },
+      { x: 5650, elevation: 105 },
+      { x: 6200, elevation: 80 },
+      { x: 6750, elevation: 90 },
     ];
     const platformWidth = 220;
     const platformHeight = 108;
     this.platformColliders = [];
+    this.enemySpawnPoints = [];
     this.bones = this.physics.add.group({
       allowGravity: false,
       immovable: true,
@@ -207,7 +215,10 @@ class PlatformScene extends Phaser.Scene {
       this.physics.add.existing(collider, true);
       this.physics.add.collider(this.player, collider);
       this.platformColliders.push(collider);
-      if (index < 2) continue;
+      if (index % 2 === 0) {
+        this.enemySpawnPoints.push({ x, surfaceY, support: collider });
+        continue;
+      }
 
       const bone = this.bones.create(x, surfaceY - 32, "bone");
       bone.setDisplaySize(40, 14.5);
@@ -226,7 +237,7 @@ class PlatformScene extends Phaser.Scene {
 
   createEnemy(x, platformTop, support) {
     const enemyScale = 0.3;
-    const enemy = this.physics.add.sprite(x, platformTop, "siamese-cat", 0);
+    const enemy = this.physics.add.sprite(x, platformTop + 5, "siamese-cat", 0);
     enemy.setScale(enemyScale).setOrigin(0.5, 1);
     enemy.setCollideWorldBounds(true);
     enemy.body.setSize(260, 200);
@@ -287,7 +298,7 @@ class PlatformScene extends Phaser.Scene {
 
       const horizontalDistance = (enemy.x - this.player.x) * facingDirection;
       const verticalDistance = Math.abs(enemy.y - this.player.y);
-      if (horizontalDistance < -40 || horizontalDistance > 100) continue;
+      if (horizontalDistance < -40 || horizontalDistance > 150) continue;
       if (verticalDistance > 150) continue;
 
       this.damageEnemy(this.player, enemy);
