@@ -5,6 +5,7 @@ import backgroundImage from "../assets/image.png";
 import platformImage from "../assets/platform.png";
 import boneImage from "../assets/bone.png";
 import groundImage from "../assets/ground.png";
+import girlImage from "../assets/girl.png";
 import barkSpriteSheet from "../assets/bark.png";
 import barkSound from "../sounds/bark.mp3";
 import meowSound from "../sounds/meow.mp3";
@@ -33,6 +34,7 @@ class PlatformScene extends Phaser.Scene {
     this.load.image("platform", platformImage);
     this.load.image("bone", boneImage);
     this.load.image("ground", groundImage);
+    this.load.image("girl", girlImage);
     this.load.audio("bark-sound", barkSound);
     this.load.audio("meow-sound", meowSound);
     this.load.audio("soundtrack", soundtrack);
@@ -41,7 +43,7 @@ class PlatformScene extends Phaser.Scene {
   create() {
     const { width, height } = this.scale;
     const floorY = height - 48;
-    this.levelWidth = 7200;
+    this.levelWidth = 8000;
 
     this.backgroundMusic = this.sound.add("soundtrack", {
       loop: true,
@@ -77,7 +79,7 @@ class PlatformScene extends Phaser.Scene {
       .setDepth(-1);
 
     const playerScale = 0.4;
-    this.player = this.physics.add.sprite(width / 2, floorY - 49, "yorkie", 4);
+    this.player = this.physics.add.sprite(100, floorY - 49, "yorkie", 4);
     this.player.setScale(playerScale);
     this.player.setCollideWorldBounds(true);
     this.player.body.setSize(260, 145);
@@ -95,7 +97,28 @@ class PlatformScene extends Phaser.Scene {
     for (const spawn of this.enemySpawnPoints) {
       this.createEnemy(spawn.x, spawn.surfaceY, spawn.support);
     }
-    this.createEnemy(this.levelWidth - 220, floorY, floor);
+    this.createGroundEnemies(floor, floorY);
+    // this.createEnemy(this.levelWidth - 220, floorY, floor);
+    const girlX = this.levelWidth - 100;
+    this.add
+      .image(girlX, floorY, "girl")
+      .setScale(0.4)
+      .setOrigin(0.5, 1)
+      .setFlipX(true)
+      .setDepth(2);
+    const girlHitbox = this.add
+      .rectangle(girlX, floorY - 38, 72, 76, 0xffffff, 0)
+      .setVisible(false);
+    this.physics.add.existing(girlHitbox, true);
+    this.girlHitbox = girlHitbox;
+    this.girlHitbox.body.enable = false;
+    this.physics.add.overlap(
+      this.player,
+      girlHitbox,
+      this.winGame,
+      undefined,
+      this,
+    );
     this.physics.add.overlap(
       this.player,
       this.bones,
@@ -106,6 +129,8 @@ class PlatformScene extends Phaser.Scene {
 
     this.collectedBones = 0;
     this.totalBones = this.bones.countActive(true);
+    this.defeatedCats = 0;
+    this.totalCats = this.enemies.length;
     this.add
       .rectangle(16, 16, 112, 42, 0x412c4d, 0.84)
       .setOrigin(0)
@@ -125,6 +150,44 @@ class PlatformScene extends Phaser.Scene {
       })
       .setScrollFactor(0)
       .setDepth(101);
+    this.add
+      .rectangle(140, 16, 142, 42, 0x412c4d, 0.84)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(100);
+    this.add
+      .image(162, 37, "siamese-cat", 0)
+      .setDisplaySize(16, 21)
+      .setScrollFactor(0)
+      .setDepth(101);
+    this.catCounter = this.add
+      .text(185, 24, `0 / ${this.totalCats}`, {
+        fontFamily: "sans-serif",
+        fontSize: "17px",
+        fontStyle: "bold",
+        color: "#ffffff",
+      })
+      .setScrollFactor(0)
+      .setDepth(101);
+    this.winOverlay = this.add
+      .rectangle(0, 0, width, height, 0x172138, 0.72)
+      .setOrigin(0)
+      .setScrollFactor(0)
+      .setDepth(150)
+      .setVisible(false);
+    this.winMessage = this.add
+      .text(width / 2, height / 2, "You win!", {
+        fontFamily: "monospace",
+        fontSize: "56px",
+        fontStyle: "bold",
+        color: "#ffe6a3",
+        stroke: "#352849",
+        strokeThickness: 8,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(151)
+      .setVisible(false);
 
     this.cameras.main.setBounds(0, 0, this.levelWidth, height);
     this.cameras.main.startFollow(this.player, false, 1, 1);
@@ -209,6 +272,8 @@ class PlatformScene extends Phaser.Scene {
     ];
     const platformWidth = 220;
     const platformHeight = 108;
+    this.platformWidth = platformWidth;
+    this.platformPositions = layouts.map(({ x }) => x);
     this.platformColliders = [];
     this.enemySpawnPoints = [];
     this.bones = this.physics.add.group({
@@ -270,6 +335,34 @@ class PlatformScene extends Phaser.Scene {
     this.enemies.push(enemy);
   }
 
+  createGroundEnemies(floor, floorY) {
+    const positions = [];
+    const minimumX = this.player.x + 350;
+    const maximumX = this.levelWidth - 450;
+    let attempts = 0;
+
+    while (positions.length < 8 && attempts < 5000) {
+      attempts += 1;
+      const x = Phaser.Math.Between(minimumX, maximumX);
+      const underPlatform = this.platformPositions.some(
+        (platformX) => Math.abs(x - platformX) < this.platformWidth / 2 + 20,
+      );
+      const tooCloseToCat = this.enemies.some(
+        (enemy) => Math.abs(x - enemy.x) < 300,
+      );
+      const tooCloseToSpawn = positions.some(
+        (spawnX) => Math.abs(x - spawnX) < 300,
+      );
+
+      if (underPlatform || tooCloseToCat || tooCloseToSpawn) continue;
+      positions.push(x);
+    }
+
+    for (const x of positions) {
+      this.createEnemy(x, floorY, floor);
+    }
+  }
+
   damageEnemy(player, enemy) {
     if (enemy.damaged) return;
 
@@ -306,6 +399,9 @@ class PlatformScene extends Phaser.Scene {
         onComplete: () => {
           enemy.supportCollider.destroy();
           enemy.destroy();
+          this.defeatedCats += 1;
+          this.catCounter.setText(`${this.defeatedCats} / ${this.totalCats}`);
+          this.updateWinAvailability();
         },
       });
     });
@@ -330,6 +426,27 @@ class PlatformScene extends Phaser.Scene {
     bone.destroy();
     this.collectedBones += 1;
     this.boneCounter.setText(`${this.collectedBones} / ${this.totalBones}`);
+    this.updateWinAvailability();
+  }
+
+  updateWinAvailability() {
+    if (
+      this.collectedBones === this.totalBones &&
+      this.defeatedCats === this.totalCats
+    ) {
+      this.girlHitbox.body.enable = true;
+      this.girlHitbox.body.updateFromGameObject();
+    }
+  }
+
+  winGame() {
+    if (this.gameWon) return;
+
+    this.gameWon = true;
+    this.player.setVelocity(0, 0);
+    this.player.body.moves = false;
+    this.winOverlay.setVisible(true);
+    this.winMessage.setVisible(true);
   }
 
   createStartPopup(width, height) {
@@ -498,7 +615,7 @@ class PlatformScene extends Phaser.Scene {
   }
 
   update() {
-    if (!this.gameStarted) return;
+    if (!this.gameStarted || this.gameWon) return;
 
     if (
       Phaser.Input.Keyboard.JustDown(this.keys.bark) &&
