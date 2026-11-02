@@ -6,6 +6,9 @@ import platformImage from "../assets/platform.png";
 import boneImage from "../assets/bone.png";
 import groundImage from "../assets/ground.png";
 import barkSpriteSheet from "../assets/bark.png";
+import barkSound from "../sounds/bark.mp3";
+import meowSound from "../sounds/meow.mp3";
+import soundtrack from "../sounds/soundtrack.mp3";
 import "./style.css";
 
 class PlatformScene extends Phaser.Scene {
@@ -30,12 +33,28 @@ class PlatformScene extends Phaser.Scene {
     this.load.image("platform", platformImage);
     this.load.image("bone", boneImage);
     this.load.image("ground", groundImage);
+    this.load.audio("bark-sound", barkSound);
+    this.load.audio("meow-sound", meowSound);
+    this.load.audio("soundtrack", soundtrack);
   }
 
   create() {
     const { width, height } = this.scale;
     const floorY = height - 48;
     this.levelWidth = 7200;
+
+    this.backgroundMusic = this.sound.add("soundtrack", {
+      loop: true,
+      volume: 0.8,
+    });
+    const startBackgroundMusic = () => {
+      if (!this.backgroundMusic.isPlaying) this.backgroundMusic.play();
+    };
+    if (this.sound.locked) {
+      this.sound.once(Phaser.Sound.Events.UNLOCKED, startBackgroundMusic);
+    } else {
+      startBackgroundMusic();
+    }
 
     this.createBackground(width, height);
 
@@ -178,7 +197,8 @@ class PlatformScene extends Phaser.Scene {
       { x: 1250, elevation: 95 },
       { x: 1800, elevation: 65 },
       { x: 2350, elevation: 105 },
-      { x: 2900, elevation: 80 },
+      { x: 2700, elevation: 150 },
+      { x: 3050, elevation: 195 },
       { x: 3450, elevation: 90 },
       { x: 4000, elevation: 75 },
       { x: 4550, elevation: 95 },
@@ -254,6 +274,7 @@ class PlatformScene extends Phaser.Scene {
     if (enemy.damaged) return;
 
     enemy.damaged = true;
+    this.sound.play("meow-sound");
     enemy.body.enable = false;
     enemy.setOrigin(0.5, 0.82).setDepth(2);
     enemy.play("enemy-hurt");
@@ -484,6 +505,7 @@ class PlatformScene extends Phaser.Scene {
       !this.playerIsBarking
     ) {
       this.playerIsBarking = true;
+      this.sound.play("bark-sound");
       this.player.setVisible(false);
       this.barkSprite
         .setPosition(this.player.x, this.player.getBounds().bottom - 10)
