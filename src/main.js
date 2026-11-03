@@ -102,7 +102,7 @@ class PlatformScene extends Phaser.Scene {
     const girlX = this.levelWidth - 100;
     this.add
       .image(girlX, floorY, "girl")
-      .setScale(0.4)
+      .setScale(0.75)
       .setOrigin(0.5, 1)
       .setFlipX(true)
       .setDepth(2);
